@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>hpc-isi-w-1 — Post-Incident Capacity Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0f1a;
+    --panel:#111b2d;
+    --panel-2:#0d1524;
+    --border:#22314a;
+    --border-soft:#1a2740;
+    --text:#e7ecf5;
+    --muted:#7f8db0;
+    --muted-2:#5a6785;
+    --critical:#f0555c;
+    --critical-dim:#3a1f24;
+    --warning:#e8a13d;
+    --warning-dim:#3a2e18;
+    --healthy:#3ed6a0;
+    --healthy-dim:#173129;
+    --accent:#5b8def;
+    --accent-dim:#182a45;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1200px 600px at 15% -10%, rgba(91,141,239,0.08), transparent),
+      var(--bg);
+    color:var(--text);
+    font-family:'IBM Plex Sans', sans-serif;
+    padding:32px 24px 64px;
+  }
+  .wrap{max-width:1180px;margin:0 auto;}
+  .mono{font-family:'IBM Plex Mono', monospace;}
+
+  /* Incident banner */
+  .banner{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:24px;
+    background:linear-gradient(90deg, var(--critical-dim), var(--panel));
+    border:1px solid #4a2429;
+    border-left:4px solid var(--critical);
+    border-radius:10px;
+    padding:18px 24px;
+    margin-bottom:28px;
+    flex-wrap:wrap;
+  }
+  .banner-left{display:flex;flex-direction:column;gap:4px;}
+  .banner-eyebrow{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    letter-spacing:.12em;
+    color:var(--critical);
+    text-transform:uppercase;
+    font-weight:600;
+  }
+  .banner-title{font-size:19px;font-weight:600;color:var(--text);}
+  .banner-sub{font-size:13px;color:var(--muted);font-family:'IBM Plex Mono',monospace;}
+  .banner-right{
+    display:flex;gap:28px;text-align:right;flex-wrap:wrap;
+  }
+  .banner-stat{display:flex;flex-direction:column;gap:2px;}
+  .banner-stat .v{font-family:'IBM Plex Mono',monospace;font-size:20px;font-weight:600;}
+  .banner-stat .l{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;}
+
+  h2.section-title{
+    font-size:12px;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+    color:var(--muted);
+    font-weight:600;
+    margin:0 0 14px 2px;
+    display:flex;align-items:center;gap:10px;
+  }
+  h2.section-title::after{
+    content:'';flex:1;height:1px;background:var(--border-soft);
+  }
+
+  /* Capacity cards */
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:32px;}
+  .card{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:20px;
+    position:relative;
+    overflow:hidden;
+  }
+  .card.crit{border-left:3px solid var(--critical);}
+  .card.warn{border-left:3px solid var(--warning);}
+  .card.ok{border-left:3px solid var(--healthy);}
+  .card-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;}
+  .card-name{font-size:13px;font-weight:600;color:var(--text);}
+  .card-nodes{font-size:11px;color:var(--muted-2);font-family:'IBM Plex Mono',monospace;margin-top:3px;}
+  .tag{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10px;
+    padding:3px 8px;
+    border-radius:20px;
+    font-weight:600;
+    letter-spacing:.04em;
+    white-space:nowrap;
+  }
+  .tag.crit{background:var(--critical-dim);color:var(--critical);border:1px solid #5c2b30;}
+  .tag.warn{background:var(--warning-dim);color:var(--warning);border:1px solid #5c4622;}
+  .tag.ok{background:var(--healthy-dim);color:var(--healthy);border:1px solid #1f5c46;}
+
+  .big-pct{font-family:'IBM Plex Mono',monospace;font-size:38px;font-weight:700;line-height:1;margin:6px 0 12px;}
+  .big-pct.crit{color:var(--critical);}
+  .big-pct.warn{color:var(--warning);}
+  .big-pct.ok{color:var(--healthy);}
+
+  .bar-track{height:8px;border-radius:4px;background:var(--panel-2);border:1px solid var(--border-soft);overflow:hidden;margin-bottom:10px;}
+  .bar-fill{height:100%;border-radius:4px;}
+  .bar-fill.crit{background:linear-gradient(90deg,#c23941,var(--critical));}
+  .bar-fill.warn{background:linear-gradient(90deg,#b5791f,var(--warning));}
+  .bar-fill.ok{background:linear-gradient(90deg,#1f9a6f,var(--healthy));}
+
+  .card-figs{display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--muted);}
+  .card-figs b{color:var(--text);font-weight:600;}
+
+  /* Tier balance signature element */
+  .balance-panel{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:24px 28px 20px;
+    margin-bottom:32px;
+  }
+  .balance-callout{
+    font-size:14px;
+    color:var(--text);
+    margin-bottom:20px;
+    line-height:1.5;
+  }
+  .balance-callout b{color:var(--warning);font-family:'IBM Plex Mono',monospace;}
+  .beam-row{display:flex;align-items:center;gap:16px;margin-bottom:14px;}
+  .beam-label{width:190px;font-size:12px;font-family:'IBM Plex Mono',monospace;color:var(--muted);flex-shrink:0;text-align:right;}
+  .beam-label b{color:var(--text);display:block;font-size:13px;margin-bottom:2px;}
+  .beam-track{flex:1;height:26px;background:var(--panel-2);border:1px solid var(--border-soft);border-radius:6px;position:relative;overflow:hidden;}
+  .beam-fill{height:100%;display:flex;align-items:center;justify-content:flex-end;padding-right:10px;}
+  .beam-fill span{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:#0a0f1a;}
+  .beam-fill.h7000{background:linear-gradient(90deg,#c23941,var(--critical));}
+  .beam-fill.h7100{background:linear-gradient(90deg,#1f9a6f,var(--healthy));}
+  .gap-marker{
+    position:absolute;top:0;bottom:0;
+    border-left:1px dashed var(--muted-2);
+  }
+
+  /* Two column: job engine + risk register */
+  .grid2{display:grid;grid-template-columns:1.1fr 1fr;gap:16px;margin-bottom:32px;align-items:start;}
+  @media (max-width:900px){.grid2{grid-template-columns:1fr;} .grid3{grid-template-columns:1fr;}}
+
+  .panel{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:20px;}
+  .job-row{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:10px 0;border-bottom:1px solid var(--border-soft);
+    font-size:13px;
+  }
+  .job-row:last-child{border-bottom:none;}
+  .job-name{display:flex;flex-direction:column;gap:2px;}
+  .job-name b{font-weight:600;}
+  .job-name span{font-size:11px;color:var(--muted-2);font-family:'IBM Plex Mono',monospace;}
+  .job-progress{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:var(--accent);text-align:right;}
+  .job-progress span{display:block;font-size:10px;color:var(--muted-2);font-weight:400;}
+
+  .risk-item{
+    display:flex;gap:12px;padding:11px 0;border-bottom:1px solid var(--border-soft);
+  }
+  .risk-item:last-child{border-bottom:none;}
+  .risk-dot{width:8px;height:8px;border-radius:50%;margin-top:5px;flex-shrink:0;}
+  .risk-dot.crit{background:var(--critical);box-shadow:0 0 8px rgba(240,85,92,0.6);}
+  .risk-dot.warn{background:var(--warning);box-shadow:0 0 8px rgba(232,161,61,0.5);}
+  .risk-dot.info{background:var(--accent);box-shadow:0 0 8px rgba(91,141,239,0.5);}
+  .risk-text{font-size:12.5px;line-height:1.5;color:var(--text);}
+  .risk-text b{font-weight:600;}
+  .risk-text .meta{display:block;font-size:10.5px;color:var(--muted-2);font-family:'IBM Plex Mono',monospace;margin-top:2px;}
+
+  /* Timeline strip */
+  .timeline{
+    display:flex;
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:22px 24px;
+    margin-bottom:24px;
+    gap:0;
+    overflow-x:auto;
+  }
+  .tl-node{flex:1;min-width:130px;position:relative;padding-right:16px;}
+  .tl-node::after{
+    content:'';position:absolute;top:5px;right:0;left:14px;height:1px;background:var(--border-soft);
+  }
+  .tl-node:last-child::after{display:none;}
+  .tl-dot{width:11px;height:11px;border-radius:50%;background:var(--muted-2);margin-bottom:10px;position:relative;z-index:1;border:2px solid var(--bg);}
+  .tl-node.crit .tl-dot{background:var(--critical);}
+  .tl-node.warn .tl-dot{background:var(--warning);}
+  .tl-node.ok .tl-dot{background:var(--healthy);}
+  .tl-node.now .tl-dot{background:var(--accent);box-shadow:0 0 0 4px var(--accent-dim);}
+  .tl-time{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--muted);margin-bottom:3px;}
+  .tl-label{font-size:12px;color:var(--text);line-height:1.4;font-weight:500;}
+
+  .footnote{
+    font-size:11px;color:var(--muted-2);font-family:'IBM Plex Mono',monospace;
+    text-align:center;margin-top:8px;line-height:1.7;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="banner">
+    <div class="banner-left">
+      <div class="banner-eyebrow">Post-Incident Status &middot; Fire Suppression Discharge</div>
+      <div class="banner-title">hpc-isi-w-1 &nbsp;—&nbsp; Capacity &amp; Recovery Dashboard</div>
+      <div class="banner-sub">Incident onset 2026-06-27 ~16:50 UTC &middot; Facility-reported trip 17:30 &middot; Snapshot as of 2026-07-04</div>
+    </div>
+    <div class="banner-right">
+      <div class="banner-stat"><span class="v mono" style="color:var(--critical)">DEGRADED</span><span class="l">Cluster status</span></div>
+      <div class="banner-stat"><span class="v mono" style="color:var(--warning)">4</span><span class="l">Smartfailed drives</span></div>
+      <div class="banner-stat"><span class="v mono" style="color:var(--critical)">2</span><span class="l">Uncovered by job</span></div>
+      <div class="banner-stat"><span class="v mono" style="color:var(--accent)">25%</span><span class="l">FlexProtectLin done</span></div>
+    </div>
+  </div>
+
+  <h2 class="section-title">Node Pool Capacity</h2>
+  <div class="grid3">
+
+    <div class="card crit">
+      <div class="card-head">
+        <div>
+          <div class="card-name">h7000_320tb_6.4tb-ssd-sed_384gb</div>
+          <div class="card-nodes">32 nodes &middot; 1&ndash;20, 25&ndash;36</div>
+        </div>
+        <span class="tag crit">CRITICAL</span>
+      </div>
+      <div class="big-pct crit">97.62%</div>
+      <div class="bar-track"><div class="bar-fill crit" style="width:97.62%"></div></div>
+      <div class="card-figs"><span>Used <b>8.76 PB</b></span><span>Total <b>8.97 PB</b></span></div>
+    </div>
+
+    <div class="card warn">
+      <div class="card-head">
+        <div>
+          <div class="card-name">h7000_h7100 (tier, combined)</div>
+          <div class="card-nodes">40 nodes &middot; both pools</div>
+        </div>
+        <span class="tag warn">ELEVATED</span>
+      </div>
+      <div class="big-pct warn">84.35%</div>
+      <div class="bar-track"><div class="bar-fill warn" style="width:84.35%"></div></div>
+      <div class="card-figs"><span>Used <b>10.34 PB</b></span><span>Total <b>12.26 PB</b></span></div>
+    </div>
+
+    <div class="card ok">
+      <div class="card-head">
+        <div>
+          <div class="card-name">h7100_480tb_15tb-ssd-sed_384gb</div>
+          <div class="card-nodes">8 nodes &middot; 41&ndash;48</div>
+        </div>
+        <span class="tag ok">HEADROOM</span>
+      </div>
+      <div class="big-pct ok">48.22%</div>
+      <div class="bar-track"><div class="bar-fill ok" style="width:48.22%"></div></div>
+      <div class="card-figs"><span>Used <b>1.59 PB</b></span><span>Total <b>3.29 PB</b></span></div>
+    </div>
+
+  </div>
+
+  <div class="balance-panel">
+    <h2 class="section-title" style="margin-bottom:16px;">Tier Imbalance — the Real Story</h2>
+    <div class="balance-callout">
+      The <code class="mono" style="color:var(--text)">h7000_h7100</code> tier isn't short on space overall — it's <b>lopsided</b>. h7100 is sitting on roughly <b>1.7 PB of idle headroom</b> while h7000 has almost none left. This is a redistribution problem (SmartPools / SmartPoolsTree), not a true capacity shortage — but redistribution is currently blocked behind the degraded-cluster job gate.
+    </div>
+    <div class="beam-row">
+      <div class="beam-label"><b>h7000 pool</b>287T &times; 32 nodes</div>
+      <div class="beam-track">
+        <div class="beam-fill h7000" style="width:97.62%"><span>97.62%</span></div>
+      </div>
+    </div>
+    <div class="beam-row">
+      <div class="beam-label"><b>h7100 pool</b>427T &times; 8 nodes</div>
+      <div class="beam-track">
+        <div class="beam-fill h7100" style="width:48.22%"><span>48.22%</span></div>
+      </div>
+    </div>
+  </div>
+
+  <h2 class="section-title">Recovery Timeline</h2>
+  <div class="timeline">
+    <div class="tl-node warn">
+      <div class="tl-dot"></div>
+      <div class="tl-time">06/27 16:35</div>
+      <div class="tl-label">Temp sensors climb across nodes 26&ndash;48</div>
+    </div>
+    <div class="tl-node crit">
+      <div class="tl-dot"></div>
+      <div class="tl-time">06/27 16:50&ndash;17:01</div>
+      <div class="tl-label">Mass node offline &middot; fire suppression discharge</div>
+    </div>
+    <div class="tl-node warn">
+      <div class="tl-dot"></div>
+      <div class="tl-time">07/03</div>
+      <div class="tl-label">Nodes re-powered in batches &middot; PSU faults logged on all 40 HDD nodes</div>
+    </div>
+    <div class="tl-node crit">
+      <div class="tl-dot"></div>
+      <div class="tl-time">07/03</div>
+      <div class="tl-label">New smartfails: node41:C3, node43:B3</div>
+    </div>
+    <div class="tl-node ok">
+      <div class="tl-dot"></div>
+      <div class="tl-time">07/04 11:36</div>
+      <div class="tl-label">FlexProtectLin (73656) launched &middot; node46/48 scope</div>
+    </div>
+    <div class="tl-node now">
+      <div class="tl-dot"></div>
+      <div class="tl-time">NOW</div>
+      <div class="tl-label">run_degraded=true &middot; SmartPoolsTree + SmartPools running concurrently</div>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="panel">
+      <h2 class="section-title">Job Engine — Active</h2>
+      <div class="job-row">
+        <div class="job-name"><b>FlexProtectLin</b><span>Job 73656 &middot; node46:14, node48:10</span></div>
+        <div class="job-progress">25%<span>Pri 1 &middot; High</span></div>
+      </div>
+      <div class="job-row">
+        <div class="job-name"><b>SmartPoolsTree</b><span>Job 72329 &middot; capacity redistribution</span></div>
+        <div class="job-progress">Running<span>Pri 2 &middot; Medium (capped)</span></div>
+      </div>
+      <div class="job-row">
+        <div class="job-name"><b>SmartPools</b><span>Job 73657 &middot; capacity redistribution</span></div>
+        <div class="job-progress">Running<span>Pri 3 &middot; Medium (capped)</span></div>
+      </div>
+      <div class="job-row">
+        <div class="job-name"><b>SnapshotDelete</b><span>Job 73650 &middot; Phase 2/2</span></div>
+        <div class="job-progress" style="color:var(--muted)">Paused<span>Resumes post-FlexProtect</span></div>
+      </div>
+      <div class="job-row">
+        <div class="job-name"><b>AutoBalanceLin</b><span>Job 72324 &middot; User Paused</span></div>
+        <div class="job-progress" style="color:var(--muted)">Manual<span>Needs explicit resume</span></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2 class="section-title">Open Risk Register</h2>
+      <div class="risk-item">
+        <div class="risk-dot crit"></div>
+        <div class="risk-text"><b>Two smartfailed drives uncovered</b> — node41:C3, node43:B3 have no active or queued FlexProtectLin job.<span class="meta">Awaiting Dell confirmation</span></div>
+      </div>
+      <div class="risk-item">
+        <div class="risk-dot warn"></div>
+        <div class="risk-text"><b>Cluster-wide PSU fault pattern</b> — all 40 HDD-bearing nodes logged HW_INFINITY_POWER_SUPPLY_FAULT on power-up. Likely facility circuit, not 40 discrete failures.<span class="meta">Escalated to Dell + facilities</span></div>
+      </div>
+      <div class="risk-item">
+        <div class="risk-dot warn"></div>
+        <div class="risk-text"><b>Node 24 power supply redundancy</b> — event open continuously since 06/27 17:50, unresolved.<span class="meta">Needs physical check</span></div>
+      </div>
+      <div class="risk-item">
+        <div class="risk-dot info"></div>
+        <div class="risk-text"><b>run_degraded override active</b> — isi_gconfig core.run_degraded=true applied to unblock capacity jobs. Must be reverted once recovery completes.<span class="meta">Tracked for revert</span></div>
+      </div>
+      <div class="risk-item">
+        <div class="risk-dot info"></div>
+        <div class="risk-text"><b>SASPHYERRLOG precursor on node 1</b> — same warning signature that preceded the node 26 failure.<span class="meta">Proactive monitoring</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footnote">
+    Source: isi storagepool list -v &middot; isi job jobs list &middot; isi event list &middot; hpc-isi-w-1 &middot; snapshot manually refreshed, not live-polling<br>
+    F600 SSD pool (nodes 21&ndash;24, 37&ndash;40) omitted from tier analysis — negligible utilization, separate media class
+  </div>
+
+</div>
+</body>
+</html>
